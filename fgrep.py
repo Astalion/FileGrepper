@@ -37,12 +37,12 @@ def filterFunc(dofunc):
     return f
 
 def showPreview(files, prevFunc, *args):
-    print("-"*35)
     runOnFiles(files, prevFunc, *args)
-    print("-"*35)
 
 def previewConfirm(files, prevFunc, *args):
+    print("-"*35)
     showPreview(files, prevFunc, *args)
+    print("-"*35)
     while True:
         print("Would you like to perform these changes (y/n)?")
         ans = input()
@@ -61,17 +61,20 @@ descstr = "{} files matching the input regex to the position\
 doFuncs = {
     "m": filterFunc(os.rename),
     "c": filterFunc(shutil.copy),
-    "d": filterFunc(lambda x, y: os.remove(x))
+    "d": filterFunc(lambda x, y: os.remove(x)),
+    "l": lambda *args: None
 }
 prevFuncs = {
     "m": previewFunc(lambda orig, new: print("Move:", orig, "->", new)),
     "c": previewFunc(lambda orig, new: print("Copy:", orig, "->", new)),
-    "d": previewFunc(lambda orig, new: print("Delete:", orig))
+    "d": previewFunc(lambda orig, new: print("Delete:", orig)),
+    "l": previewFunc(lambda orig, new: print(orig))
 }
 hasoutput = {
     "m": True,
     "c": True,
-    "d": False    
+    "d": False,
+    "l": False    
 }
 
 #
@@ -106,6 +109,10 @@ parser_d = subparsers.add_parser("d", help="Delete files", parents=[dummyparser]
 parser_d.add_argument("input", metavar="file",
     type=str, help="Input Regexp string to delete")
 
+parser_l = subparsers.add_parser("l", help="List files", parents=[dummyparser])
+parser_l.add_argument("input", metavar="file",
+    type=str, help="Input Regexp string to find")
+
 args = parser.parse_args()
 
 #
@@ -128,12 +135,12 @@ prevFunc = prevFuncs[command]
 
 files = list(recursiveFiles()) if recursive else os.listdir(".")
 
-if force:
+if force or (command == "l"):
     confirm = True
     showPreview(files, prevFunc, regex, fmtstring)
 else:
     confirm = previewConfirm(files, prevFunc, regex, fmtstring)
 
-if confirm:
+if confirm and (command != "l"):
     runOnFiles(files, doFunc, regex, fmtstring)
     print("Done")
