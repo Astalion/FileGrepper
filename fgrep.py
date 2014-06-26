@@ -17,29 +17,20 @@ def newName(path, regex, fmtstring):
     folder, fname = os.path.split(path)
     match = regex.match(fname)
     if(match is not None):
+        if fmtstring is None: return True
         return os.path.join(folder, fmtstring.format(*match.groups()))
     return None
 
-# Preview functions
-def previewCopy(fname, regex, fmtstring):
-    name = newName(fname, regex, fmtstring)
-    if(name is not None):
-        print("Copy:", fname, "->", name)
-
-def previewMove(fname, regex, fmtstring):
-    name = newName(fname, regex, fmtstring)
-    if(name is not None):
-        print("Move:", fname, "->", name)
-
-def previewDelete(fname, regex, *args):
-    match = regex.match(fname)
-    if(match is not None):
-        print("Delete:", fname)
+# Preview function maker
+def previewFunc(pfunc):
+    def preview(fname, regex, fmtstring):        
+        outname = newName(fname, regex, fmtstring)
+        if(outname is not None):
+            pfunc(fname, outname)
+    return preview
 
 def filterFunc(dofunc):
     def f(fname, regex, fmtstring):
-        if(fmtstring is None): fmtstring = ""
-
         newname = newName(fname, regex, fmtstring)
         if(newname is not None):
             dofunc(fname, newname)
@@ -73,9 +64,9 @@ doFuncs = {
     "d": filterFunc(lambda x, y: os.remove(x))
 }
 prevFuncs = {
-    "m": previewMove,
-    "c": previewCopy,
-    "d": previewDelete
+    "m": previewFunc(lambda orig, new: print("Move:", orig, "->", new)),
+    "c": previewFunc(lambda orig, new: print("Copy:", orig, "->", new)),
+    "d": previewFunc(lambda orig, new: print("Delete:", orig))
 }
 hasoutput = {
     "m": True,
