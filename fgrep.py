@@ -18,44 +18,64 @@ try:
 except (ImportError, ValueError):
     colourText = lambda text: text
 
+#
+#   FileGrepper class
+#
+class FileGrepper:
+    def __init__(self, command, restring, fmtstring, recursive, overwrite):
+        self.regex = re.compile(restring)
+        self.fmtstring = fmtstring
+        self.files = list(recursiveFiles()) if recursive else os.listdir(".")
+        self.overwrite = overwrite
+        self.change = False
+        self.prevFunc = prevFuncs[command]
+        self.doFunc = doFuncs[command]
+
+    def newName(self, path):
+        folder, fname = os.path.split(path)
+        match = self.regex.match(fname)
+        if(match is not None):
+            if self.fmtstring is None: return True
+            return os.path.join(folder, self.fmtstring.format(*match.groups()))
+        return None
+
+    def showPreview(self):
+        runOnFiles(self.files, self.prevFunc, self)
+
+    def run(self):
+        runOnFiles(self.files, self.doFunc, self)
+
 
 #
-# Functions
+# Helper functions
 #
 def runOnFiles(files, command, *args, **kwargs):
     for fname in files:
-        command(fname, *args, **kwargs)
+        command(*args, fname=fname, **kwargs)
 
 def recursiveFiles():
     for root, _, files in os.walk("."):
         for fname in files:
             yield os.path.relpath(os.path.join(root, fname))
 
-def newName(path, regex, fmtstring):
-    folder, fname = os.path.split(path)
-    match = regex.match(fname)
-    if(match is not None):
-        if fmtstring is None: return True
-        return os.path.join(folder, fmtstring.format(*match.groups()))
-    return None
-
-# Preview function maker
+#
+# Function factories
+#
 def previewFunc(pfunc):
-    def preview(fname, regex, fmtstring, overwrite=True):        
-        outname = newName(fname, regex, fmtstring)
+    def preview(self, fname):        
+        outname = self.newName(fname)
         if(outname is not None):
             exists = os.path.isfile(outname)
-            if exists and not overwrite: return
-            global change
-            change = True
+            if exists and not self.overwrite: return
+            self.change = True # Mark that something would be changed
             pfunc(fname, outname, exists)
     return preview
 
 def filterFunc(dofunc):
-    def f(fname, regex, fmtstring, overwrite=True):
-        newname = newName(fname, regex, fmtstring)
+    def f(self, fname):
+        newname = self.newName(fname)
         if(newname is not None):
-            if not overwrite and os.path.isfile(newname): return
+            if not self.overwrite and os.path.isfile(newname): return
             try:
                 os.remove(newname)
             except:
@@ -63,9 +83,9 @@ def filterFunc(dofunc):
             dofunc(fname, newname)
     return f
 
-def showPreview(files, prevFunc, *args, **kwargs):
-    runOnFiles(files, prevFunc, *args, **kwargs)
-
+#
+# General function
+#
 def previewConfirm():
     print()
     while True:
@@ -144,38 +164,36 @@ parser_l = subparsers.add_parser("l", help="List files", parents=[dummyparser])
 parser_l.add_argument("input", metavar="file",
     type=str, help="Input Regexp string to find")
 
-args = parser.parse_args()
-
 #
 # Get parsed arguments
 #
+args = parser.parse_args()
+
 command = args.command
 if(command is None):
     parser.parse_args(["-h"])
 
-recursive = args.r
-force = args.f
-overwrite = args.n
-regex = re.compile(args.input)
+restring = args.input
 fmtstring = args.output if hasoutput[command] else None
-doFunc = doFuncs[command]
-prevFunc = prevFuncs[command]
+recursive = args.r
+overwrite = args.n if hasoutput[command] else None
+force = args.f
+
+fg = FileGrepper(command, restring, fmtstring, recursive, overwrite)
 
 #
 # Do things
 #
 
-files = list(recursiveFiles()) if recursive else os.listdir(".")
-
-change = False
-showPreview(files, prevFunc, regex, fmtstring, overwrite=overwrite)
-if not change:
+fg.showPreview()
+if not fg.change:
     print("No matches found")
     sys.exit()
+
 if command == "l": sys.exit()
 
 confirm = True if force else previewConfirm()
 
 if confirm:
-    runOnFiles(files, doFunc, regex, fmtstring, overwrite=overwrite)
+    fg.run()
     print("Done")
