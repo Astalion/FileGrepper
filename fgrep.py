@@ -57,7 +57,7 @@ class FileCommand:
 #
 class FileGrepper:
     def __init__(self, command, restring, fmtstring, recursive, overwrite):
-        self.regex = re.compile(restring)
+        self.regex = re.compile(restring + "$")
         self.fmtstring = fmtstring
         self.files = list(recursiveFiles()) if recursive else os.listdir(".")
         self.overwrite = overwrite
