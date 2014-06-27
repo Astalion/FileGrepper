@@ -1,6 +1,24 @@
 #!/usr/bin/env python3
 import sys, os, re, argparse, shutil
 
+try:
+    from colorama import init, Fore
+    init()
+    colours = {
+        'red': Fore.RED,
+        'cyan': Fore.CYAN,
+        'black': Fore.BLACK,
+        'green': Fore.GREEN,
+        'yellow': Fore.YELLOW,
+        'blue': Fore.BLUE,
+        'white': Fore.WHITE
+    }
+    def colourText(text, colour):
+        return colours[colour] + text + Fore.RESET
+except (ImportError, ValueError):
+    colourText = lambda text: text
+
+
 #
 # Functions
 #
@@ -26,26 +44,28 @@ def previewFunc(pfunc):
     def preview(fname, regex, fmtstring):        
         outname = newName(fname, regex, fmtstring)
         if(outname is not None):
-            pfunc(fname, outname)
+            exists = os.path.isfile(outname)
+            pfunc(fname, outname, exists)
     return preview
 
 def filterFunc(dofunc):
     def f(fname, regex, fmtstring):
         newname = newName(fname, regex, fmtstring)
         if(newname is not None):
+            try:
+                os.remove(newname)
+            except:
+                pass
             dofunc(fname, newname)
     return f
 
 def showPreview(files, prevFunc, *args):
     runOnFiles(files, prevFunc, *args)
 
-def previewConfirm(files, prevFunc, *args):
-    print("-"*35)
-    showPreview(files, prevFunc, *args)
-    print("-"*35)
+def previewConfirm():
+    print()
     while True:
-        print("Would you like to perform these changes (y/n)?")
-        ans = input()
+        ans = input("Would you like to perform these changes (y/n)? ")
         if(ans == "y"):
             return True
         elif(ans == "n"):
@@ -65,10 +85,15 @@ doFuncs = {
     "l": lambda *args: None
 }
 prevFuncs = {
-    "m": previewFunc(lambda orig, new: print("Move:", orig, "->", new)),
-    "c": previewFunc(lambda orig, new: print("Copy:", orig, "->", new)),
-    "d": previewFunc(lambda orig, new: print("Delete:", orig)),
-    "l": previewFunc(lambda orig, new: print(orig))
+    "m": previewFunc(lambda orig, new, exists:
+        print(colourText("Move:", "yellow"), orig, "->", new,
+            colourText("(Overwrite)", "red") if exists else "")),
+    "c": previewFunc(lambda orig, new, exists:
+        print(colourText("Copy:","green"), orig, "->", new,
+            colourText("(Overwrite)", "red") if exists else "")),
+    "d": previewFunc(lambda orig, new, exists:
+        print(colourText("Delete:", "red"), orig)),
+    "l": previewFunc(lambda orig, new, exists: print(orig))
 }
 hasoutput = {
     "m": True,
@@ -135,12 +160,11 @@ prevFunc = prevFuncs[command]
 
 files = list(recursiveFiles()) if recursive else os.listdir(".")
 
-if force or (command == "l"):
-    confirm = True
-    showPreview(files, prevFunc, regex, fmtstring)
-else:
-    confirm = previewConfirm(files, prevFunc, regex, fmtstring)
+showPreview(files, prevFunc, regex, fmtstring)
+if command == "l": sys.exit()
 
-if confirm and (command != "l"):
+confirm = True if force else previewConfirm()
+
+if confirm:
     runOnFiles(files, doFunc, regex, fmtstring)
     print("Done")
