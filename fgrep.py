@@ -19,6 +19,40 @@ except (ImportError, ValueError):
     colourText = lambda text: text
 
 #
+#   FileCommand class
+#
+class FileCommand:
+    def __init__(self, doFunc, pFunc, hasOutput):
+        self.doFunc = FileCommand.filterFunc(doFunc)
+        self.prevFunc = FileCommand.previewFunc(pFunc)
+        self.hasOutput = hasOutput
+
+    #
+    # Class functions
+    #
+    def filterFunc(dofunc):
+        def f(self, fname):
+            newname = self.newName(fname)
+            if(newname is not None):
+                if not self.overwrite and os.path.isfile(newname): return
+                try:
+                    os.remove(newname)
+                except:
+                    pass
+                dofunc(fname, newname)
+        return f
+
+    def previewFunc(pfunc):
+        def preview(self, fname):        
+            outname = self.newName(fname)
+            if(outname is not None):
+                exists = os.path.isfile(outname)
+                if exists and not self.overwrite: return
+                self.change = True # Mark that something would be changed
+                pfunc(fname, outname, exists)
+        return preview
+
+#
 #   FileGrepper class
 #
 class FileGrepper:
@@ -28,9 +62,14 @@ class FileGrepper:
         self.files = list(recursiveFiles()) if recursive else os.listdir(".")
         self.overwrite = overwrite
         self.change = False
-        self.prevFunc = prevFuncs[command]
-        self.doFunc = doFuncs[command]
 
+        self.command = FileGrepper.commands[command]
+        self.prevFunc = self.command.prevFunc
+        self.doFunc = self.command.doFunc
+
+    #
+    # Member functions
+    #
     def newName(self, path):
         folder, fname = os.path.split(path)
         match = self.regex.match(fname)
@@ -45,10 +84,44 @@ class FileGrepper:
     def run(self):
         runOnFiles(self.files, self.doFunc, self)
 
+    #
+    # Class variables
+    #
+    commands = {
+        "m": FileCommand(
+                os.rename,
+                lambda orig, new, exists:
+                    print(colourText("Move:", "yellow"), orig, "->", new,
+                        colourText("(Overwrite)", "red") if exists else ""),
+                True
+            ),
+        "c": FileCommand(
+                shutil.copy,
+                lambda orig, new, exists:
+                    print(colourText("Copy:","green"), orig, "->", new,
+                        colourText("(Overwrite)", "red") if exists else ""),
+                True
+            ),
+        "d": FileCommand(
+                lambda x, y: os.remove(x),
+                lambda orig, new, exists:
+                    print(colourText("Delete:", "red"), orig),
+                False
+            ),
+        "l": FileCommand(
+                lambda *args: None,
+                lambda orig, new, exists: print(orig),
+                False
+            )
+    }
 
 #
 # Helper functions
 #
+
+# Essentially just map(), but (1): passes on any positional and keyword args,
+# with the iterated value passed as keyword fname, and (2): does not save the
+# list of returned values
 def runOnFiles(files, command, *args, **kwargs):
     for fname in files:
         command(*args, fname=fname, **kwargs)
@@ -59,32 +132,7 @@ def recursiveFiles():
             yield os.path.relpath(os.path.join(root, fname))
 
 #
-# Function factories
-#
-def previewFunc(pfunc):
-    def preview(self, fname):        
-        outname = self.newName(fname)
-        if(outname is not None):
-            exists = os.path.isfile(outname)
-            if exists and not self.overwrite: return
-            self.change = True # Mark that something would be changed
-            pfunc(fname, outname, exists)
-    return preview
-
-def filterFunc(dofunc):
-    def f(self, fname):
-        newname = self.newName(fname)
-        if(newname is not None):
-            if not self.overwrite and os.path.isfile(newname): return
-            try:
-                os.remove(newname)
-            except:
-                pass
-            dofunc(fname, newname)
-    return f
-
-#
-# General function
+# Function
 #
 def previewConfirm():
     print()
@@ -102,29 +150,6 @@ descstr = "{} files matching the input regex to the position\
         denoted by the format string. Any capture groups are passed to\
         the output string, as a python-style format string (i.e. {{}} for\
         the next group, or {{n}} for the n-th group)."
-doFuncs = {
-    "m": filterFunc(os.rename),
-    "c": filterFunc(shutil.copy),
-    "d": filterFunc(lambda x, y: os.remove(x)),
-    "l": lambda *args: None
-}
-prevFuncs = {
-    "m": previewFunc(lambda orig, new, exists:
-        print(colourText("Move:", "yellow"), orig, "->", new,
-            colourText("(Overwrite)", "red") if exists else "")),
-    "c": previewFunc(lambda orig, new, exists:
-        print(colourText("Copy:","green"), orig, "->", new,
-            colourText("(Overwrite)", "red") if exists else "")),
-    "d": previewFunc(lambda orig, new, exists:
-        print(colourText("Delete:", "red"), orig)),
-    "l": previewFunc(lambda orig, new, exists: print(orig))
-}
-hasoutput = {
-    "m": True,
-    "c": True,
-    "d": False,
-    "l": False    
-}
 
 #
 # Set up argument parser
@@ -173,10 +198,12 @@ command = args.command
 if(command is None):
     parser.parse_args(["-h"])
 
+hasOutput = FileGrepper.commands[command].hasOutput
+
 restring = args.input
-fmtstring = args.output if hasoutput[command] else None
+fmtstring = args.output if hasOutput else None
 recursive = args.r
-overwrite = args.n if hasoutput[command] else None
+overwrite = args.n if hasOutput else None
 force = args.f
 
 fg = FileGrepper(command, restring, fmtstring, recursive, overwrite)
