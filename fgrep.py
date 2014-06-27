@@ -41,17 +41,21 @@ def newName(path, regex, fmtstring):
 
 # Preview function maker
 def previewFunc(pfunc):
-    def preview(fname, regex, fmtstring):        
+    def preview(fname, regex, fmtstring, overwrite=True):        
         outname = newName(fname, regex, fmtstring)
         if(outname is not None):
             exists = os.path.isfile(outname)
+            if exists and not overwrite: return
+            global change
+            change = True
             pfunc(fname, outname, exists)
     return preview
 
 def filterFunc(dofunc):
-    def f(fname, regex, fmtstring):
+    def f(fname, regex, fmtstring, overwrite=True):
         newname = newName(fname, regex, fmtstring)
         if(newname is not None):
+            if not overwrite and os.path.isfile(newname): return
             try:
                 os.remove(newname)
             except:
@@ -59,8 +63,8 @@ def filterFunc(dofunc):
             dofunc(fname, newname)
     return f
 
-def showPreview(files, prevFunc, *args):
-    runOnFiles(files, prevFunc, *args)
+def showPreview(files, prevFunc, *args, **kwargs):
+    runOnFiles(files, prevFunc, *args, **kwargs)
 
 def previewConfirm():
     print()
@@ -121,6 +125,7 @@ parser_m.add_argument("input", metavar="from",
     type=str, help="Input regex string")
 parser_m.add_argument("output", metavar="to",
     type=str, help="Output format string (python-style)")
+parser_m.add_argument("-n", action='store_false', help="No overwriting of files")
 # -a for "absolute" path when doing recursion?
 
 parser_c = subparsers.add_parser("c", help="Copy files", parents=[dummyparser],
@@ -129,6 +134,7 @@ parser_c.add_argument("input", metavar="from",
     type=str, help="Input Regexp string")
 parser_c.add_argument("output", metavar="to",
     type=str, help="Output format string (python-style)")
+parser_c.add_argument("-n", action='store_false', help="No overwriting of files")
 
 parser_d = subparsers.add_parser("d", help="Delete files", parents=[dummyparser])
 parser_d.add_argument("input", metavar="file",
@@ -149,6 +155,7 @@ if(command is None):
 
 recursive = args.r
 force = args.f
+overwrite = args.n
 regex = re.compile(args.input)
 fmtstring = args.output if hasoutput[command] else None
 doFunc = doFuncs[command]
@@ -160,11 +167,15 @@ prevFunc = prevFuncs[command]
 
 files = list(recursiveFiles()) if recursive else os.listdir(".")
 
-showPreview(files, prevFunc, regex, fmtstring)
+change = False
+showPreview(files, prevFunc, regex, fmtstring, overwrite=overwrite)
+if not change:
+    print("No matches found")
+    sys.exit()
 if command == "l": sys.exit()
 
 confirm = True if force else previewConfirm()
 
 if confirm:
-    runOnFiles(files, doFunc, regex, fmtstring)
+    runOnFiles(files, doFunc, regex, fmtstring, overwrite=overwrite)
     print("Done")
