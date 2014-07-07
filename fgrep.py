@@ -16,7 +16,21 @@ try:
     def colourText(text, colour):
         return colours[colour] + text + Fore.RESET
 except (ImportError, ValueError):
-    colourText = lambda text: text
+    from sys import platform as _platform
+    if _platform == "linux" or _platform == "linux2":
+        colours= {
+            'red': 31,
+            'cyan': 36,
+            'black': 30,
+            'green': 32,
+            'yellow': 33,
+            'blue': 34,
+            'white': 37
+        }
+        def colourText(text, colour):
+            return '\033[' + str(colours[colour]) + 'm' + text + '\033[39m'
+    else:
+        colourText = lambda text, colour: text
 
 #
 #   FileCommand class
