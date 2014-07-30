@@ -57,7 +57,10 @@ class FileCommand:
 #
 class FileGrepper:
     def __init__(self, command, restring, fmtstring, recursive, overwrite):
-        self.regex = re.compile(restring + "$")
+        if (restring is not None):
+            self.regex = re.compile(restring + "$")
+        else:
+            self.regex = None
         self.fmtstring = fmtstring
         self.files = list(recursiveFiles()) if recursive else os.listdir(".")
         self.overwrite = overwrite
@@ -71,6 +74,8 @@ class FileGrepper:
     # Member functions
     #
     def newName(self, path):
+        if(self.regex is None):
+            return True
         folder, fname = os.path.split(path)
         match = self.regex.match(fname)
         if(match is not None):
@@ -186,7 +191,7 @@ parser_d.add_argument("input", metavar="file",
     type=str, help="Input Regexp string to delete")
 
 parser_l = subparsers.add_parser("l", help="List files", parents=[dummyparser])
-parser_l.add_argument("input", metavar="file",
+parser_l.add_argument("input", metavar="file", nargs='?',
     type=str, help="Input Regexp string to find")
 
 #
